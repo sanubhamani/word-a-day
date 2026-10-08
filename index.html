@@ -190,10 +190,13 @@ function renderQuiz() {
   const list = WORDS[level];
   const n = list.length;
   const seed = dayNumber(dateFor(offset));
-  const a = list[(indexFor(offset - 1) + 1 + (seed * 37) % (n - 2)) % n][3];
-  let b = list[(indexFor(offset - 1) + 1 + (seed * 91 + 11) % (n - 2)) % n][3];
-  if (b === a || b === mean) b = list[(indexFor(offset - 1) + n - 1) % n][3];
-  const opts = [mean, a, b];
+  // Wrong answers come from words other than yesterday's or today's, so the quiz never gives today's word away.
+  const skip = new Set([indexFor(offset - 1), indexFor(offset)]);
+  const opts = [mean];
+  for (let k = 0; opts.length < 3 && k < 50; k++) {
+    const i = (seed * 37 + k * 211) % n;
+    if (!skip.has(i) && !opts.includes(list[i][3])) opts.push(list[i][3]);
+  }
   const pos = seed % 3;
   [opts[0], opts[pos]] = [opts[pos], opts[0]];
   const box = $("choices");
