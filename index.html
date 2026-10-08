@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Noto+Nastaliq+Urdu:wght@400;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: one phone-width column, like a single dictionary entry on an index card, with today's word under a highlighter stroke. */
 :root {
@@ -54,6 +54,9 @@ header { display: flex; justify-content: space-between; align-items: baseline; g
 
 .entry { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 22px 22px; display: grid; gap: 14px; }
 .word { font-family: var(--display); font-weight: 400; font-size: clamp(2.4rem, 12vw, 3.6rem); line-height: 1.05; margin: 0; overflow-wrap: anywhere; }
+.urdu .word { font-family: "Noto Nastaliq Urdu", "Geeza Pro", serif; line-height: 2.1; font-size: clamp(2.2rem, 11vw, 3.2rem); }
+.urdu .word span { background: linear-gradient(transparent 62%, var(--mark) 62%, var(--mark) 85%, transparent 85%); }
+.urdu .say .pron { font-size: 1.05rem; color: var(--ink); }
 .word span { background: linear-gradient(transparent 55%, var(--mark) 55%, var(--mark) 92%, transparent 92%); padding: 0 .06em; }
 .say { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); }
 .say .pron { font-family: var(--mono); font-size: .92rem; }
@@ -62,6 +65,8 @@ header { display: flex; justify-content: space-between; align-items: baseline; g
 .label { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 2px; }
 .meaning { font-size: 1.22rem; margin: 0; }
 .use { margin: 0; font-style: italic; border-left: 3px solid var(--mark); padding-left: 12px; }
+.hook { background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+.hook p:last-child { margin: 0; font-weight: 700; }
 .from { margin: 0; font-size: .92rem; color: var(--muted); }
 .count { margin: 0; font-family: var(--mono); font-size: .75rem; color: var(--muted); letter-spacing: .04em; }
 
@@ -94,11 +99,12 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <div class="level" role="group" aria-label="Word level">
       <button id="lvl-kids" type="button" aria-pressed="false">Kids</button>
       <button id="lvl-adults" type="button" aria-pressed="true">Grown-ups</button>
+      <button id="lvl-urdu" type="button" aria-pressed="false">Urdu</button>
     </div>
   </header>
 
   <article class="entry" aria-live="polite">
-    <h1 class="word"><span id="word"></span></h1>
+    <h1 class="word"><span id="word" dir="auto"></span></h1>
     <div class="say">
       <span class="pron" id="pron"></span>
       <span class="pos" id="pos"></span>
@@ -107,6 +113,10 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <div>
       <p class="label">What it means</p>
       <p class="meaning" id="meaning"></p>
+    </div>
+    <div class="hook" id="hookbox">
+      <p class="label">Remember it</p>
+      <p id="hook"></p>
     </div>
     <div>
       <p class="label">Use it</p>
@@ -121,9 +131,16 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
   <section class="quiz" aria-labelledby="qhead">
     <h2 id="qhead">Remember yesterday?</h2>
-    <p id="qask"></p>
-    <div class="quiz" id="choices"></div>
-    <div class="result" id="result" role="status"></div>
+    <p id="qask-1"></p>
+    <div class="quiz" id="choices-1"></div>
+    <div class="result" id="result-1" role="status"></div>
+  </section>
+
+  <section class="quiz" aria-labelledby="qhead7">
+    <h2 id="qhead7">Remember last week?</h2>
+    <p id="qask-7"></p>
+    <div class="quiz" id="choices-7"></div>
+    <div class="result" id="result-7" role="status"></div>
   </section>
 
   <div class="peek">
@@ -136,7 +153,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 <script src="words.js"></script>
 <script>
-// Day 1 is 8 October 2026. Each list holds 1,825 words: five years with no repeats.
+// Day 1 is 8 October 2026. Kids and Grown-ups hold 1,825 words each: five years with no repeats. Urdu holds one year.
 const START = Date.UTC(2026, 9, 8) / 86400000;
 const WORDS = window.WORDS;
 
@@ -146,6 +163,7 @@ const store = {
 };
 
 let level = store.get("wad-level", "adults");
+if (!WORDS[level]) level = "adults";
 let offset = 0;
 const $ = id => document.getElementById(id);
 
@@ -163,12 +181,18 @@ function render() {
   $("pos").textContent = pos;
   $("meaning").textContent = mean;
   $("use").textContent = use;
+  const hook = wordFor(offset)[6];
+  $("hook").textContent = hook || "";
+  $("hookbox").hidden = !hook;
   $("from").textContent = from ? "Where it comes from: " + from : "";
   $("from").hidden = !from;
   $("count").textContent = "Word " + (indexFor(offset) + 1).toLocaleString() + " of " + WORDS[level].length.toLocaleString();
   $("peeklabel").textContent = offset === 0 ? "Today" : (offset > 0 ? "+" : "") + offset + (Math.abs(offset) === 1 ? " day" : " days");
   $("lvl-kids").setAttribute("aria-pressed", level === "kids");
   $("lvl-adults").setAttribute("aria-pressed", level === "adults");
+  $("lvl-urdu").setAttribute("aria-pressed", level === "urdu");
+  document.body.classList.toggle("urdu", level === "urdu");
+  $("word").lang = level === "urdu" ? "ur" : "en";
   renderUsed();
   renderQuiz();
 }
@@ -184,14 +208,20 @@ function renderUsed() {
   $("streak").textContent = streak ? streak + (streak === 1 ? " day" : " days") + " in a row" : "Use the word once today, out loud or in a text.";
 }
 
-function renderQuiz() {
-  const [w, , , mean] = wordFor(offset - 1);
-  $("qask").textContent = "What does “" + w + "” mean?";
+// Seeing a word again a day later and a week later is what makes it stick.
+function renderQuiz() { quiz(1); quiz(7); }
+
+function quiz(back) {
+  const entry = wordFor(offset - back);
+  const [w, , , mean] = entry;
+  const hook = entry[6];
+  $("qask-" + back).textContent = "What does “" + w + "”" + (level === "urdu" ? " (" + entry[1].replace(/-/g, "").toLowerCase() + ")" : "") + " mean?";
   const list = WORDS[level];
   const n = list.length;
-  const seed = dayNumber(dateFor(offset));
-  // Wrong answers come from words other than yesterday's or today's, so the quiz never gives today's word away.
-  const skip = new Set([indexFor(offset - 1), indexFor(offset)]);
+  const seed = dayNumber(dateFor(offset)) + back * 13;
+  // Wrong answers never come from today's word or the last week, so the quiz can't give one away.
+  const skip = new Set();
+  for (let d = 0; d <= 7; d++) skip.add(indexFor(offset - d));
   const opts = [mean];
   for (let k = 0; opts.length < 3 && k < 50; k++) {
     const i = (seed * 37 + k * 211) % n;
@@ -199,16 +229,16 @@ function renderQuiz() {
   }
   const pos = seed % 3;
   [opts[0], opts[pos]] = [opts[pos], opts[0]];
-  const box = $("choices");
+  const box = $("choices-" + back), result = $("result-" + back);
   box.innerHTML = "";
-  $("result").textContent = "";
+  result.textContent = "";
   opts.forEach((o, i) => {
     const btn = document.createElement("button");
-    btn.type = "button"; btn.className = "choice"; btn.id = "choice-" + i; btn.textContent = o;
+    btn.type = "button"; btn.className = "choice"; btn.id = "choice-" + back + "-" + i; btn.textContent = o;
     btn.addEventListener("click", () => {
       [...box.children].forEach(c => { c.disabled = true; if (c.textContent === mean) c.classList.add("right"); });
-      if (o === mean) { $("result").textContent = "Yes! You remembered."; $("result").style.color = "var(--good)"; }
-      else { btn.classList.add("wrong"); $("result").textContent = "Not quite. Now you know it."; $("result").style.color = "var(--bad)"; }
+      if (o === mean) { result.textContent = "Yes! You remembered."; result.style.color = "var(--good)"; }
+      else { btn.classList.add("wrong"); result.textContent = "Not quite. " + (hook || "Now you know it."); result.style.color = "var(--bad)"; }
     });
     box.appendChild(btn);
   });
@@ -222,14 +252,23 @@ $("did").addEventListener("click", () => {
 });
 $("speak").addEventListener("click", () => {
   try {
-    const [w, , , mean] = wordFor(offset);
-    const u = new SpeechSynthesisUtterance(w + ". " + mean);
+    const [w, pron, , mean] = wordFor(offset);
+    let u;
+    if (level === "urdu") {
+      // Use an Urdu voice when the phone has one; otherwise read the English spelling.
+      const v = speechSynthesis.getVoices().find(x => /^ur/i.test(x.lang));
+      u = new SpeechSynthesisUtterance(v ? w : pron.replace(/-/g, " "));
+      if (v) { u.voice = v; u.lang = v.lang; }
+    } else {
+      u = new SpeechSynthesisUtterance(w + ". " + mean);
+    }
     u.rate = 0.9;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch (e) { $("speak").textContent = "Sound not available"; }
 });
 $("lvl-kids").addEventListener("click", () => { level = "kids"; store.set("wad-level", level); render(); });
 $("lvl-adults").addEventListener("click", () => { level = "adults"; store.set("wad-level", level); render(); });
+$("lvl-urdu").addEventListener("click", () => { level = "urdu"; store.set("wad-level", level); render(); });
 $("prev").addEventListener("click", () => { offset--; render(); });
 $("next").addEventListener("click", () => { offset++; render(); });
 
